@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+
+from tqdm import tqdm
+import requests
+from time import sleep 
+import asyncio
+
+
+def convertor(url) :
+    return(url.replace(r"\u0026" , "&"))
+
+user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36"
+
+link = input("please enter your youtube link : ") 
+
+responce = requests.get(link , headers = {"User-Agent" : user_agent})
+
+data = [] 
+html_code = responce.text[responce.text.find('{"itag":'):]
+
+for i in range(responce.text.count('{"itag":')-1) :
+    last_index = html_code[html_code.find('{"itag":')+8:].find('{"itag":')+1
+    data.append(html_code[html_code.find('{"itag":') : last_index])
+    html_code = html_code[last_index-1-html_code.find('{"itag":')+8:]
+
+data.append(html_code[html_code.find('{"itag":') : html_code.find("}")])
+
+video_audio = list(filter(lambda x : "audioQuality" in x and  "qualityLabel" in x , data))
+
+for i in range(len(video_audio)) :
+    audio_quality = video_audio[i][video_audio[i].find('AUDIO_QUALITY_')+14:video_audio[i].find('","approxDurationMs')]
+
+    quality = video_audio[i][video_audio[i].find('"qualityLabel":"')+16:video_audio[i].find('","projectionType')]
+    print(f"[{i+1}] quality : {quality} , audio quality : {audio_quality.lower()}")
+
+while True : 
+    try :
+        video_index_input = int(input("Enter the number : "))-1
+        break
+    except : print("please enter number not string ! ") 
+
+if video_index_input not in range(len( video_audio)) : 
+    print("your number is not in the list .")
+
+
+url = video_audio[video_index_input][video_audio[video_index_input].find('"url":"')+7 : video_audio[video_index_input].find('","mimeType"')]
+
+extension = video_audio[video_index_input][video_audio[video_index_input].find('"mimeType":"video/') + 18 : video_audio[video_index_input].find('; codecs=')]
+
+file_name = input("please enter name for file <without extension> : ")+f".{extension}"
+
+def downloader(url) :
+    url_response = requests.get(url , stream = True ) 
+    file_size = int(url_response.headers.get("Content-Length", 0))
+
+    progress = tqdm(url_response.iter_content(1024), f"Downloading {file_name}", total=file_size, unit="B", unit_scale=True, unit_divisor=1024)
+    with open(file_name , "wb") as file : 
+        for data in progress.iterable : 
+            file.write(data) 
+            progress.update(len(data))
+
+downloader(convertor(url))
